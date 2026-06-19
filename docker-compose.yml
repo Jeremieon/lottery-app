@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: lottery
+      POSTGRES_PASSWORD: lottery123
+      POSTGRES_DB: lotterydb
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lottery -d lotterydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  fastapi-games:
+    build: ./fastapi-games
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://lottery:lottery123@postgres:5432/lotterydb
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  fastapi-results:
+    build: ./fastapi-results
+    restart: always
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://lottery:lottery123@postgres:5432/lotterydb
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  react-frontend:
+    build: ./react-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_GAMES_API=${REACT_APP_GAMES_API}
+      - REACT_APP_RESULTS_API=${REACT_APP_RESULTS_API}
+    depends_on:
+      - fastapi-games
+      - fastapi-results
+
+volumes:
+  pgdata:
